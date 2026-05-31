@@ -15,34 +15,51 @@ import com.demo.persistencia.demopersistencia.security.JwtUtil;
 @RequestMapping("/auth") // ✅ IMPORTANTE
 public class AuthController {
 
-    @Autowired
+   @Autowired
 private PasswordEncoder passwordEncoder;
-
-    @Autowired
-private UsuarioRepository usuarioRepository;
+@Autowired
+ UsuarioRepository usuarioRepository;
 
 @PostMapping("/login")
 public LoginResponse login(@RequestBody LoginRequest request) {
 
-    String username = request.getUsername().trim();
-    String password = request.getPassword().trim();
+    try {
 
-    Usuario usuario = usuarioRepository.findByUsername(username);
+        String username = request.getUsername().trim();
+        String password = request.getPassword().trim();
 
-    if (usuario == null) {
-        throw new RuntimeException("Usuario no encontrado");
+       
+        Usuario usuario = usuarioRepository.findByUsername(username);
+
+        if (usuario == null) {
+            throw new RuntimeException("Usuario no encontrado");
+        }
+
+        String passwordBD = usuario.getPassword();
+
+        boolean valido;
+
+        // ✅ Detectar si es bcrypt (cualquier variante)
+        if (passwordBD.startsWith("$2")) {
+            valido = passwordEncoder.matches(password, passwordBD);
+        } else {
+            valido = passwordBD.equals(password);
+        }
+
+        if (!valido) {
+            throw new RuntimeException("Contraseña incorrecta");
+        }
+
+        String token = JwtUtil.generarToken(usuario);
+
+        LoginResponse response = new LoginResponse();
+        response.setToken(token);
+        response.setTipoUsuario(usuario.getTipoUsuario());
+
+        return response;
+
+    } catch (Exception e) {
+        e.printStackTrace(); // 🔥 ESTO TE MUESTRA EL ERROR REAL EN LOGS
+        throw new RuntimeException("Error en login");
     }
-
-    // ✅ SOLUCIÓN REAL
-    if (!passwordEncoder.matches(password, usuario.getPassword())) {
-        throw new RuntimeException("Contraseña incorrecta");
-    }
-
-    String token = JwtUtil.generarToken(usuario);
-
-    LoginResponse response = new LoginResponse();
-    response.setToken(token);
-    response.setTipoUsuario(usuario.getTipoUsuario());
-
-    return response;
 }}
