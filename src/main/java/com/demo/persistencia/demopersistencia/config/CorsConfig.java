@@ -20,7 +20,7 @@ public class CorsConfig {
 
         // ✅ ❗ SIN SLASH AL FINAL (ERROR QUE TENÍAS)
         config.setAllowedOrigins(List.of(
-            "https://frontend-proyecto-production-cce2.up.railway.app/"
+            "https://frontend-proyecto-production-6ef5.up.railway.app/"
         ));
 
         config.setAllowedHeaders(List.of("*"));
