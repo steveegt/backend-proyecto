@@ -61,22 +61,31 @@ public class MedicoController {
     // ===============================
     // ✅ CREAR MÉDICO (SOLO ADMIN)
     // ===============================
-    @PostMapping("/crear-con-usuario")
-    public Map<String, String> crear(@RequestBody Map<String, Object> datos,
-                                     HttpServletRequest request) {
+   @PostMapping("/crear-con-usuario")
+public Map<String, String> crear(@RequestBody Map<String, Object> datos,
+                                 HttpServletRequest request) {
 
-        String token = request.getHeader("Authorization").substring(7);
+    try {
+
+        // ✅ VALIDAR TOKEN
+        String header = request.getHeader("Authorization");
+
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
+        }
+
+        String token = header.substring(7);
         String rol = JwtUtil.getRol(token);
 
         if (!"ADMIN".equals(rol)) {
             throw new RuntimeException("Solo ADMIN puede crear médicos");
         }
 
-        // ✅ VALIDAR USERNAME DUPLICADO
+        // ✅ USERNAME
         String username = (String) datos.get("username");
 
         if (usuarioRepository.findByUsername(username) != null) {
-            throw new RuntimeException("❌ El username ya existe");
+            throw new RuntimeException("El username ya existe");
         }
 
         // ✅ CREAR MÉDICO
@@ -87,10 +96,16 @@ public class MedicoController {
         medico.setObservacion((String) datos.get("observacion"));
         medico.setColegiado((String) datos.get("colegiado"));
 
+        // ✅ MANEJO SEGURO DE EDAD
         if (datos.get("edad") != null && !datos.get("edad").toString().isEmpty()) {
-            medico.setEdad(Integer.parseInt(datos.get("edad").toString()));
+            try {
+                medico.setEdad(Integer.parseInt(datos.get("edad").toString()));
+            } catch (Exception e) {
+                throw new RuntimeException("Edad inválida");
+            }
         }
 
+        // ✅ SOLO si tienes ese campo en la entidad
         medico.setFechaRegistro(LocalDate.now());
 
         // ✅ GUARDAR MÉDICO
@@ -100,7 +115,6 @@ public class MedicoController {
         Usuario usuario = new Usuario();
         usuario.setUsername(username);
 
-        // ✅ 🔥 AQUÍ ESTÁ LA SOLUCIÓN
         usuario.setPassword(
             passwordEncoder.encode((String) datos.get("password"))
         );
@@ -108,77 +122,15 @@ public class MedicoController {
         usuario.setTipoUsuario("MEDICO");
         usuario.setMedicoId(medico.getMedicoId());
 
-        // ✅ GUARDAR USUARIO
         usuarioRepository.save(usuario);
 
-        return Map.of("mensaje", "✅ Médico creado correctamente");
+        return Map.of("mensaje", "Médico creado correctamente");
+
+    } catch (Exception e) {
+
+        // 🔥 ESTO ES CLAVE
+        e.printStackTrace();
+
+        throw new RuntimeException("Error creando médico: " + e.getMessage());
     }
-
-    // ===============================
-    // ✅ BUSCAR (SOLO ADMIN)
-    // ===============================
-    @GetMapping("/buscar")
-    public List<Medico> buscar(@RequestParam String nombre,
-                               HttpServletRequest request) {
-
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
-
-        if (!"ADMIN".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        return medicoRepository.findByNombreCompletoContainingIgnoreCase(nombre);
-    }
-
-    // ===============================
-    // ✅ ACTUALIZAR (SOLO ADMIN)
-    // ===============================
-    @PutMapping("/actualizar/{id}")
-    public Medico actualizar(@PathVariable Long id,
-                             @RequestBody Medico m,
-                             HttpServletRequest request) {
-
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
-
-        if (!"ADMIN".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        Medico medico = medicoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Médico no encontrado"));
-
-        medico.setNombreCompleto(m.getNombreCompleto());
-        medico.setEspecialidad(m.getEspecialidad());
-        medico.setDireccion(m.getDireccion());
-        medico.setEdad(m.getEdad());
-        medico.setObservacion(m.getObservacion());
-        medico.setColegiado(m.getColegiado());
-
-        return medicoRepository.save(medico);
-    }
-
-    // ===============================
-    // ✅ ELIMINAR (SOLO ADMIN)
-    // ===============================
-    @DeleteMapping("/eliminar/{id}")
-    public void eliminar(@PathVariable Long id,
-                         HttpServletRequest request) {
-
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
-
-        if (!"ADMIN".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        Medico medico = medicoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Médico no encontrado"));
-
-        Usuario usuario = usuarioRepository.findByMedicoId(medico.getMedicoId());
-
-        if (usuario != null) {
-            usuarioRepository.deleteById(usuario.getId());
-        }
-
-        medicoRepository.deleteById(id);
-    }
-}
+}}

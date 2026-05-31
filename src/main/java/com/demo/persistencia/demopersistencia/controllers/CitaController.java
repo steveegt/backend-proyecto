@@ -41,81 +41,107 @@ public class CitaController {
     @Autowired
     private CitaRepository citaRepository;
 
-    // ✅ CREAR (SOLO PACIENTE)
+    // ===============================
+    // ✅ CREAR (PACIENTE)
+    // ===============================
     @PostMapping("/crear")
     public Cita crear(@RequestBody CitaDTO dto, HttpServletRequest request) {
 
-        String token = request.getHeader("Authorization").substring(7);
-        String username = JwtUtil.getUsername(token);
-        String rol = JwtUtil.getRol(token);
+        try {
 
-        if (!"PACIENTE".equals(rol)) {
-            throw new RuntimeException("Solo pacientes pueden crear citas");
-        }
+            // ✅ VALIDAR TOKEN
+            String header = request.getHeader("Authorization");
 
-        Usuario usuario = usuarioRepository.findByUsername(username);
-
-        if (usuario == null || usuario.getPacienteId() == null) {
-            throw new RuntimeException("Usuario inválido");
-        }
-
-        Paciente paciente = pacienteRepository.findById(usuario.getPacienteId())
-                .orElseThrow(() -> new RuntimeException("Paciente no existe"));
-
-        List<Medico> medicos = medicoRepository.findAll();
-
-        Long medicoAsignado = null;
-
-        for (Medico medico : medicos) {
-
-            Long medicoId = medico.getMedicoId();
-
-            boolean ocupado =
-                citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
-                    medicoId, dto.getFecha(), dto.getHora(), "AGENDADA"
-                ) ||
-                citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
-                    medicoId, dto.getFecha(), dto.getHora(), "PENDIENTE"
-                );
-
-            if (!ocupado) {
-                medicoAsignado = medicoId;
-                break;
+            if (header == null || !header.startsWith("Bearer ")) {
+                throw new RuntimeException("Token inválido");
             }
+
+            String token = header.substring(7);
+            String username = JwtUtil.getUsername(token);
+            String rol = JwtUtil.getRol(token);
+
+            if (!"PACIENTE".equals(rol)) {
+                throw new RuntimeException("Solo pacientes pueden crear citas");
+            }
+
+            Usuario usuario = usuarioRepository.findByUsername(username);
+
+            if (usuario == null || usuario.getPacienteId() == null) {
+                throw new RuntimeException("Usuario inválido");
+            }
+
+            Paciente paciente = pacienteRepository.findById(usuario.getPacienteId())
+                    .orElseThrow(() -> new RuntimeException("Paciente no existe"));
+
+            List<Medico> medicos = medicoRepository.findAll();
+
+            Long medicoAsignado = null;
+
+            for (Medico medico : medicos) {
+
+                boolean ocupado =
+                        citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
+                                medico.getMedicoId(), dto.getFecha(), dto.getHora(), "AGENDADA"
+                        ) ||
+                        citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
+                                medico.getMedicoId(), dto.getFecha(), dto.getHora(), "PENDIENTE"
+                        );
+
+                if (!ocupado) {
+                    medicoAsignado = medico.getMedicoId();
+                    break;
+                }
+            }
+
+            if (medicoAsignado == null) {
+                throw new RuntimeException("No hay médicos disponibles");
+            }
+
+            boolean pacienteOcupado =
+                    citaRepository.existsByPaciente_IdPacienteAndFechaAndHoraAndEstado(
+                            paciente.getIdPaciente(), dto.getFecha(), dto.getHora(), "AGENDADA"
+                    ) ||
+                    citaRepository.existsByPaciente_IdPacienteAndFechaAndHoraAndEstado(
+                            paciente.getIdPaciente(), dto.getFecha(), dto.getHora(), "PENDIENTE"
+                    );
+
+            if (pacienteOcupado) {
+                throw new RuntimeException("Ya tienes una cita en esa hora");
+            }
+
+            Cita cita = new Cita();
+            cita.setPaciente(paciente);
+
+            // ✅ SEGURIDAD EXTRA FECHA
+            LocalDate fecha = dto.getFecha();
+
+            cita.setFecha(fecha);
+            cita.setHora(dto.getHora());
+            cita.setObservacion(dto.getObservacion());
+            cita.setEstado("PENDIENTE");
+            cita.setMedicoId(medicoAsignado);
+
+            return citaRepository.save(cita);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error creando cita: " + e.getMessage());
         }
-
-        if (medicoAsignado == null) {
-            throw new RuntimeException("No hay médicos disponibles");
-        }
-
-        boolean pacienteOcupado =
-            citaRepository.existsByPaciente_IdPacienteAndFechaAndHoraAndEstado(
-                paciente.getIdPaciente(), dto.getFecha(), dto.getHora(), "AGENDADA"
-            ) ||
-            citaRepository.existsByPaciente_IdPacienteAndFechaAndHoraAndEstado(
-                paciente.getIdPaciente(), dto.getFecha(), dto.getHora(), "PENDIENTE"
-            );
-
-        if (pacienteOcupado) {
-            throw new RuntimeException("Ya tienes una cita en esa hora");
-        }
-
-        Cita cita = new Cita();
-        cita.setPaciente(paciente);
-        cita.setFecha(dto.getFecha());
-        cita.setHora(dto.getHora());
-        cita.setObservacion(dto.getObservacion());
-        cita.setEstado("PENDIENTE");
-        cita.setMedicoId(medicoAsignado);
-
-        return citaRepository.save(cita);
     }
 
-    // ✅ ADMIN - VER TODAS LAS CITAS
+    // ===============================
+    // ✅ ADMIN - TODAS
+    // ===============================
     @GetMapping("/todas")
     public List<CitaAdminDTO> obtenerTodas(HttpServletRequest request) {
 
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
+        String header = request.getHeader("Authorization");
+
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
+        }
+
+        String rol = JwtUtil.getRol(header.substring(7));
 
         if (!"ADMIN".equals(rol)) {
             throw new RuntimeException("Acceso denegado");
@@ -124,11 +150,19 @@ public class CitaController {
         return citaRepository.obtenerTodas();
     }
 
+    // ===============================
     // ✅ ADMIN - BUSCAR
+    // ===============================
     @GetMapping("/buscar")
     public List<CitaAdminDTO> buscar(@RequestParam String nombre, HttpServletRequest request) {
 
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
+        String header = request.getHeader("Authorization");
+
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
+        }
+
+        String rol = JwtUtil.getRol(header.substring(7));
 
         if (!"ADMIN".equals(rol)) {
             throw new RuntimeException("Acceso denegado");
@@ -137,128 +171,85 @@ public class CitaController {
         return citaRepository.buscarPorPaciente(nombre);
     }
 
-    // ✅ HORARIOS (ABIERTO)
+    // ===============================
+    // ✅ HORARIOS
+    // ===============================
     @GetMapping("/horarios-no-disponibles")
     public List<String> horariosNoDisponibles(@RequestParam String fecha) {
 
-        List<Medico> medicos = medicoRepository.findAll();
+        try {
 
-        List<String> horas = List.of(
-            "08:00 - 09:00", "09:00 - 10:00",
-            "10:00 - 11:00", "11:00 - 12:00",
-            "12:00 - 13:00", "14:00 - 15:00",
-            "15:00 - 16:00", "16:00 - 17:00"
-        );
-
-        List<String> bloqueadas = new java.util.ArrayList<>();
-
-        for (String hora : horas) {
-
-            int ocupados = 0;
-
-            for (Medico medico : medicos) {
-
-                boolean ocupado =
-                    citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
-                        medico.getMedicoId(),
-                        LocalDate.parse(fecha),
-                        hora,
-                        "AGENDADA"
-                    ) ||
-                    citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
-                        medico.getMedicoId(),
-                        LocalDate.parse(fecha),
-                        hora,
-                        "PENDIENTE"
-                    );
-
-                if (ocupado) ocupados++;
+            // ✅ FIX DE FECHA (igual que pacientes)
+            if (fecha.contains("T")) {
+                fecha = fecha.split("T")[0];
             }
 
-            if (ocupados == medicos.size()) {
-                bloqueadas.add(hora);
+            LocalDate fechaParsed = LocalDate.parse(fecha);
+
+            List<Medico> medicos = medicoRepository.findAll();
+
+            List<String> horas = List.of(
+                    "08:00 - 09:00", "09:00 - 10:00",
+                    "10:00 - 11:00", "11:00 - 12:00",
+                    "12:00 - 13:00", "14:00 - 15:00",
+                    "15:00 - 16:00", "16:00 - 17:00"
+            );
+
+            List<String> bloqueadas = new java.util.ArrayList<>();
+
+            for (String hora : horas) {
+
+                int ocupados = 0;
+
+                for (Medico medico : medicos) {
+
+                    boolean ocupado =
+                            citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
+                                    medico.getMedicoId(),
+                                    fechaParsed,
+                                    hora,
+                                    "AGENDADA"
+                            ) ||
+                            citaRepository.existsByMedicoIdAndFechaAndHoraAndEstado(
+                                    medico.getMedicoId(),
+                                    fechaParsed,
+                                    hora,
+                                    "PENDIENTE"
+                            );
+
+                    if (ocupado) ocupados++;
+                }
+
+                if (ocupados == medicos.size()) {
+                    bloqueadas.add(hora);
+                }
             }
+
+            return bloqueadas;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error en horarios: " + e.getMessage());
         }
-
-        return bloqueadas;
     }
 
-    // ✅ PACIENTE - MIS CITAS
+    // ===============================
+    // ✅ MIS CITAS
+    // ===============================
     @GetMapping("/mis-citas")
     public List<Cita> misCitas(HttpServletRequest request) {
 
-        String token = request.getHeader("Authorization").substring(7);
-        String username = JwtUtil.getUsername(token);
-        String rol = JwtUtil.getRol(token);
+        String header = request.getHeader("Authorization");
 
-        if (!"PACIENTE".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
         }
+
+        String token = header.substring(7);
+        String username = JwtUtil.getUsername(token);
 
         Usuario usuario = usuarioRepository.findByUsername(username);
 
         return citaService.listarPorPaciente(usuario.getPacienteId());
-    }
-
-    // ✅ MEDICO - PENDIENTES
-    @GetMapping("/citas-medico")
-    public List<Cita> citasMedico(HttpServletRequest request) {
-
-        String token = request.getHeader("Authorization").substring(7);
-        String username = JwtUtil.getUsername(token);
-        String rol = JwtUtil.getRol(token);
-
-        if (!"MEDICO".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        Usuario usuario = usuarioRepository.findByUsername(username);
-
-        return citaService.citasPendientes(usuario.getMedicoId());
-    }
-
-    // ✅ MEDICO - AGENDADAS
-    @GetMapping("/citas-medico-agendadas")
-    public List<Cita> citasAgendadas(HttpServletRequest request) {
-
-        String token = request.getHeader("Authorization").substring(7);
-        String username = JwtUtil.getUsername(token);
-        String rol = JwtUtil.getRol(token);
-
-        if (!"MEDICO".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        Usuario usuario = usuarioRepository.findByUsername(username);
-
-        return citaService.citasAgendadas(usuario.getMedicoId());
-    }
-
-    // ✅ CANCELAR (PACIENTE)
-    @PutMapping("/cancelar/{id}")
-    public Cita cancelar(@PathVariable Long id, HttpServletRequest request) {
-
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
-
-        if (!"PACIENTE".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        return citaService.cancelarCita(id);
-    }
-
-    // ✅ REPROGRAMAR (PACIENTE)
-    @PutMapping("/reprogramar/{id}")
-    public Cita reprogramar(@PathVariable Long id,
-                           @RequestBody CitaDTO dto,
-                           HttpServletRequest request) {
-
-        String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
-
-        if (!"PACIENTE".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
-
-        return citaService.reprogramarCita(id, dto.getFecha(), dto.getHora());
     }
 }

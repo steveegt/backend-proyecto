@@ -15,7 +15,6 @@ import com.demo.persistencia.demopersistencia.security.JwtUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-// ✅ IMPORTANTE
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @CrossOrigin(origins = "*")
@@ -29,7 +28,6 @@ public class PacienteController {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
-    // ✅ ENCODER
     @Autowired
     private PasswordEncoder passwordEncoder;
 
@@ -40,66 +38,75 @@ public class PacienteController {
     public Map<String, String> crear(@RequestBody Map<String, Object> datos,
                                      HttpServletRequest request) {
 
-        // ✅ VALIDAR TOKEN
-        String header = request.getHeader("Authorization");
+        try {
 
-        if (header == null || !header.startsWith("Bearer ")) {
-            throw new RuntimeException("Token inválido");
-        }
+            // ✅ VALIDAR TOKEN
+            String header = request.getHeader("Authorization");
 
-        String token = header.substring(7);
-        String rol = JwtUtil.getRol(token);
+            if (header == null || !header.startsWith("Bearer ")) {
+                throw new RuntimeException("Token inválido");
+            }
 
-        if (!"ADMIN".equals(rol)) {
-            throw new RuntimeException("Solo ADMIN puede crear pacientes");
-        }
+            String token = header.substring(7);
+            String rol = JwtUtil.getRol(token);
 
-        // ✅ VALIDAR USERNAME
-        String username = (String) datos.get("username");
+            if (!"ADMIN".equals(rol)) {
+                throw new RuntimeException("Solo ADMIN puede crear pacientes");
+            }
 
-        if (usuarioRepository.findByUsername(username) != null) {
-            throw new RuntimeException("❌ El username ya existe");
-        }
+            // ✅ USERNAME
+            String username = (String) datos.get("username");
 
-        // ✅ CREAR PACIENTE
-        Paciente paciente = new Paciente();
+            if (usuarioRepository.findByUsername(username) != null) {
+                throw new RuntimeException("El username ya existe");
+            }
 
-        paciente.setNombreCompleto((String) datos.get("nombreCompleto"));
-        paciente.setDireccion((String) datos.get("direccion"));
-        paciente.setTelefono((String) datos.get("telefono"));
-        paciente.setSeguro((String) datos.get("seguro"));
+            // ✅ CREAR PACIENTE
+            Paciente paciente = new Paciente();
+            paciente.setNombreCompleto((String) datos.get("nombreCompleto"));
+            paciente.setDireccion((String) datos.get("direccion"));
+            paciente.setTelefono((String) datos.get("telefono"));
+            paciente.setSeguro((String) datos.get("seguro"));
 
-        // ✅ FECHA (IMPORTANTE)
-        if (datos.get("fechaNacimiento") != null &&
-            !datos.get("fechaNacimiento").toString().isEmpty()) {
+            // ✅ 🔥 FIX REAL DE FECHA
+            if (datos.get("fechaNacimiento") != null) {
 
-            paciente.setFechaNacimiento(
-                LocalDate.parse(datos.get("fechaNacimiento").toString())
+                String fechaStr = datos.get("fechaNacimiento").toString();
+
+                // cortar si viene con formato completo ISO
+                if (fechaStr.contains("T")) {
+                    fechaStr = fechaStr.split("T")[0];
+                }
+
+                paciente.setFechaNacimiento(LocalDate.parse(fechaStr));
+            }
+
+            // ✅ GUARDAR PACIENTE
+            paciente = pacienteRepository.save(paciente);
+
+            // ✅ CREAR USUARIO
+            Usuario usuario = new Usuario();
+            usuario.setUsername(username);
+
+            // ✅ ENCRIPTAR PASSWORD
+            usuario.setPassword(
+                passwordEncoder.encode((String) datos.get("password"))
             );
+
+            usuario.setTipoUsuario("PACIENTE");
+            usuario.setPacienteId(paciente.getIdPaciente());
+
+            usuarioRepository.save(usuario);
+
+            return Map.of("mensaje", "Paciente creado correctamente");
+
+        } catch (Exception e) {
+
+            // 🔥 IMPORTANTE: VER ERROR REAL EN LOGS
+            e.printStackTrace();
+
+            throw new RuntimeException("Error creando paciente: " + e.getMessage());
         }
-
-
-
-        // ✅ GUARDAR PACIENTE
-        paciente = pacienteRepository.save(paciente);
-
-        // ✅ CREAR USUARIO
-        Usuario usuario = new Usuario();
-
-        usuario.setUsername(username);
-
-        // 🔥 🔥 🔥 CLAVE DEL ERROR 500 🔥 🔥 🔥
-        usuario.setPassword(
-            passwordEncoder.encode((String) datos.get("password"))
-        );
-
-        usuario.setTipoUsuario("PACIENTE");
-        usuario.setPacienteId(paciente.getIdPaciente());
-
-        // ✅ GUARDAR USUARIO
-        usuarioRepository.save(usuario);
-
-        return Map.of("mensaje", "✅ Paciente creado correctamente");
     }
 
     // ===============================
@@ -116,24 +123,19 @@ public class PacienteController {
 
         String token = header.substring(7);
         String username = JwtUtil.getUsername(token);
-        String rol = JwtUtil.getRol(token);
-
-        if (!"PACIENTE".equals(rol)) {
-            throw new RuntimeException("Acceso denegado");
-        }
 
         Usuario usuario = usuarioRepository.findByUsername(username);
 
         return pacienteRepository.findById(usuario.getPacienteId())
-            .orElseThrow(() -> new RuntimeException("Paciente no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Paciente no encontrado"));
     }
 
     // ===============================
-    // ✅ BUSCAR PACIENTES
+    // ✅ BUSCAR
     // ===============================
     @GetMapping("/buscar")
     public List<Paciente> buscar(@RequestParam String nombre,
-                                HttpServletRequest request) {
+                                 HttpServletRequest request) {
 
         String header = request.getHeader("Authorization");
 
