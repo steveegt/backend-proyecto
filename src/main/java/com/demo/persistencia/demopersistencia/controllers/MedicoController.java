@@ -57,8 +57,7 @@ public class MedicoController {
             throw new RuntimeException("Usuario sin médico");
         }
 
-        return medicoRepository
-                .findById(usuario.getMedicoId())
+        return medicoRepository.findById(usuario.getMedicoId())
                 .orElseThrow(() -> new RuntimeException("Médico no encontrado"));
     }
 
@@ -84,14 +83,12 @@ public class MedicoController {
                 throw new RuntimeException("Solo ADMIN puede crear médicos");
             }
 
-            // ✅ USERNAME
             String username = (String) datos.get("username");
 
             if (usuarioRepository.findByUsername(username) != null) {
                 throw new RuntimeException("El username ya existe");
             }
 
-            // ✅ CREAR MÉDICO
             Medico medico = new Medico();
             medico.setNombreCompleto((String) datos.get("nombreCompleto"));
             medico.setEspecialidad((String) datos.get("especialidad"));
@@ -100,23 +97,16 @@ public class MedicoController {
             medico.setColegiado((String) datos.get("colegiado"));
 
             if (datos.get("edad") != null && !datos.get("edad").toString().isEmpty()) {
-                try {
-                    medico.setEdad(Integer.parseInt(datos.get("edad").toString()));
-                } catch (Exception e) {
-                    throw new RuntimeException("Edad inválida");
-                }
+                medico.setEdad(Integer.parseInt(datos.get("edad").toString()));
             }
 
             medico.setFechaRegistro(LocalDate.now());
 
             medico = medicoRepository.save(medico);
 
-            // ✅ CREAR USUARIO
             Usuario usuario = new Usuario();
             usuario.setUsername(username);
-            usuario.setPassword(
-                passwordEncoder.encode((String) datos.get("password"))
-            );
+            usuario.setPassword(passwordEncoder.encode((String) datos.get("password")));
             usuario.setTipoUsuario("MEDICO");
             usuario.setMedicoId(medico.getMedicoId());
 
@@ -131,7 +121,7 @@ public class MedicoController {
     }
 
     // ===============================
-    // ✅ BUSCAR MÉDICOS (SOLO ADMIN) ✅🔥 NUEVO
+    // ✅ BUSCAR MÉDICOS (SOLO ADMIN)
     // ===============================
     @GetMapping("/buscar")
     public List<Medico> buscar(@RequestParam String nombre,
@@ -151,5 +141,71 @@ public class MedicoController {
         }
 
         return medicoRepository.findByNombreCompletoContainingIgnoreCase(nombre);
+    }
+
+    // ===============================
+    // ✅ ACTUALIZAR MÉDICO (SOLO ADMIN) 🔥 ESTE ERA EL PROBLEMA
+    // ===============================
+    @PutMapping("/actualizar/{id}")
+    public Medico actualizar(@PathVariable Long id,
+                              @RequestBody Medico m,
+                              HttpServletRequest request) {
+
+        String header = request.getHeader("Authorization");
+
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
+        }
+
+        String token = header.substring(7);
+        String rol = JwtUtil.getRol(token);
+
+        if (!"ADMIN".equals(rol)) {
+            throw new RuntimeException("Acceso denegado");
+        }
+
+        Medico medico = medicoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Médico no encontrado"));
+
+        medico.setNombreCompleto(m.getNombreCompleto());
+        medico.setEspecialidad(m.getEspecialidad());
+        medico.setDireccion(m.getDireccion());
+        medico.setEdad(m.getEdad());
+        medico.setObservacion(m.getObservacion());
+        medico.setColegiado(m.getColegiado());
+
+        return medicoRepository.save(medico);
+    }
+
+    // ===============================
+    // ✅ ELIMINAR MÉDICO (SOLO ADMIN)
+    // ===============================
+    @DeleteMapping("/eliminar/{id}")
+    public void eliminar(@PathVariable Long id,
+                         HttpServletRequest request) {
+
+        String header = request.getHeader("Authorization");
+
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
+        }
+
+        String token = header.substring(7);
+        String rol = JwtUtil.getRol(token);
+
+        if (!"ADMIN".equals(rol)) {
+            throw new RuntimeException("Acceso denegado");
+        }
+
+        Medico medico = medicoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Médico no encontrado"));
+
+        Usuario usuario = usuarioRepository.findByMedicoId(medico.getMedicoId());
+
+        if (usuario != null) {
+            usuarioRepository.deleteById(usuario.getId());
+        }
+
+        medicoRepository.deleteById(id);
     }
 }
