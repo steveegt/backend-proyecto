@@ -1,12 +1,15 @@
 package com.demo.persistencia.demopersistencia.security;
-import org.springframework.security.crypto.password.PasswordEncoder;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
-
+@Configuration
 public class SecurityConfig {
 
     @Bean
@@ -14,9 +17,10 @@ public class SecurityConfig {
 
         http
             .csrf(csrf -> csrf.disable())
+            .cors(cors -> {}) // ✅ IMPORTANTE
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/**").permitAll() // ✅ LOGIN LIBRE
-                .anyRequest().permitAll() // ✅ TODO LIBRE (por ahora)
+                .anyRequest().permitAll() // ✅ TODO LIBRE
             );
 
         return http.build();
@@ -27,5 +31,3 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
-
-
