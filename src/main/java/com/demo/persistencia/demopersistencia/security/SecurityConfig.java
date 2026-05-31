@@ -20,21 +20,11 @@ public class SecurityConfig {
             .cors(cors -> {})
             .authorizeHttpRequests(auth -> auth
 
-                // ✅ LOGIN libre
+                // ✅ LOGIN LIBRE
                 .requestMatchers("/auth/**").permitAll()
 
-                // ✅ MÉDICO
-                .requestMatchers("/api/medico/**").hasAuthority("MEDICO")
-                .requestMatchers("/api/citas/**").hasAuthority("MEDICO")
-
-                // ✅ PACIENTE
-                .requestMatchers("/api/paciente/**").hasAuthority("PACIENTE")
-
-                // ✅ ADMIN
-                .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
-
-                // ✅ CUALQUIER OTRO
-                .anyRequest().authenticated()
+                // ✅ TODO LO DEMÁS PERMITIDO (VALIDAS CON JWT MANUAL)
+                .anyRequest().permitAll()
             );
 
         return http.build();
