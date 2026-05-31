@@ -12,23 +12,21 @@ import com.demo.persistencia.demopersistencia.security.JwtUtil;
 
 @CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/auth") // ✅ IMPORTANTE
+@RequestMapping("/auth")
 public class AuthController {
 
-   @Autowired
-private PasswordEncoder passwordEncoder;
-@Autowired
- UsuarioRepository usuarioRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
-@PostMapping("/login")
-public LoginResponse login(@RequestBody LoginRequest request) {
+    @Autowired
+    private UsuarioRepository usuarioRepository;
 
-    try {
+    @PostMapping("/login")
+    public LoginResponse login(@RequestBody LoginRequest request) {
 
         String username = request.getUsername().trim();
         String password = request.getPassword().trim();
 
-       
         Usuario usuario = usuarioRepository.findByUsername(username);
 
         if (usuario == null) {
@@ -37,12 +35,14 @@ public LoginResponse login(@RequestBody LoginRequest request) {
 
         String passwordBD = usuario.getPassword();
 
-        boolean valido;
+        boolean valido = false;
 
-        // ✅ Detectar si es bcrypt (cualquier variante)
-        if (passwordBD.startsWith("$2")) {
+        try {
+            // ✅ SOLO USAR bcrypt SIEMPRE
             valido = passwordEncoder.matches(password, passwordBD);
-        } else {
+
+        } catch (Exception e) {
+            // fallback si algo raro pasa
             valido = passwordBD.equals(password);
         }
 
@@ -57,9 +57,5 @@ public LoginResponse login(@RequestBody LoginRequest request) {
         response.setTipoUsuario(usuario.getTipoUsuario());
 
         return response;
-
-    } catch (Exception e) {
-        e.printStackTrace(); // 🔥 ESTO TE MUESTRA EL ERROR REAL EN LOGS
-        throw new RuntimeException("Error en login");
     }
-}}
+}
