@@ -17,10 +17,24 @@ public class SecurityConfig {
 
         http
             .csrf(csrf -> csrf.disable())
-            .cors(cors -> {}) // ✅ IMPORTANTE
+            .cors(cors -> {})
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**").permitAll() // ✅ LOGIN LIBRE
-                .anyRequest().permitAll() // ✅ TODO LIBRE
+
+                // ✅ LOGIN libre
+                .requestMatchers("/auth/**").permitAll()
+
+                // ✅ MÉDICO
+                .requestMatchers("/api/medico/**").hasAuthority("MEDICO")
+                .requestMatchers("/api/citas/**").hasAuthority("MEDICO")
+
+                // ✅ PACIENTE
+                .requestMatchers("/api/paciente/**").hasAuthority("PACIENTE")
+
+                // ✅ ADMIN
+                .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
+
+                // ✅ CUALQUIER OTRO
+                .anyRequest().authenticated()
             );
 
         return http.build();
