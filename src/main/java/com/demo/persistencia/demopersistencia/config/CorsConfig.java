@@ -20,7 +20,7 @@ public class CorsConfig {
 
         // ✅ PERMITIR TU FRONTEND
         config.setAllowedOrigins(List.of(
-            "https://frontend-proyecto-production-cd08.up.railway.app"
+            "https://frontend-proyecto-production-f55d.up.railway.app/"
         ));
 
         config.setAllowedHeaders(List.of("*"));
