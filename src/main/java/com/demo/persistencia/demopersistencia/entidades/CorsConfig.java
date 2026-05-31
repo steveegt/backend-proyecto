@@ -14,7 +14,7 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         // ✅ permitir frontend en railway
-        config.addAllowedOrigin("https://frontend-proyecto-production-f49d.up.railway.app");
+        config.addAllowedOrigin("https://frontend-proyecto-production-96ac.up.railway.app/");
 
         // ✅ opcional: también local
         config.addAllowedOrigin("http://localhost:4200");
