@@ -12,9 +12,16 @@ public class CorsConfig {
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
+
+        // ✅ permitir frontend en railway
+        config.addAllowedOrigin("https://frontend-proyecto-production-f49d.up.railway.app");
+
+        // ✅ opcional: también local
         config.addAllowedOrigin("http://localhost:4200");
+
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
+        config.setAllowCredentials(true); // ✅ importante para JWT
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
