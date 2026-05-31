@@ -11,28 +11,36 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 @Component
-
 public class JwtFilter extends OncePerRequestFilter {
 
-@Override
-protected void doFilterInternal(HttpServletRequest request,
-        HttpServletResponse response,
-        FilterChain filterChain)
-        throws ServletException, IOException {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                   HttpServletResponse response,
+                                   FilterChain filterChain)
+            throws ServletException, IOException {
 
-    String header = request.getHeader("Authorization");
+        String header = request.getHeader("Authorization");
 
-    if (header != null && header.startsWith("Bearer ")) {
+        if (header != null && header.startsWith("Bearer ")) {
 
-        String token = header.substring(7);
+            try {
+                String token = header.substring(7);
 
-        String username = JwtUtil.getUsername(token);
-        String rol = JwtUtil.getRol(token);
+                // ✅ intentar leer token
+                String username = JwtUtil.getUsername(token);
+                String rol = JwtUtil.getRol(token);
 
-        request.setAttribute("username", username);
-        request.setAttribute("rol", rol); 
+                // ✅ guardar en request (opcional)
+                request.setAttribute("username", username);
+                request.setAttribute("rol", rol);
+
+            } catch (Exception e) {
+                // 🔥 CLAVE: NO BLOQUEAR
+                System.out.println("⚠️ Token inválido o expirado");
+            }
+        }
+
+        // ✅ SIEMPRE continuar (esto evita 403)
+        filterChain.doFilter(request, response);
     }
-
-    filterChain.doFilter(request, response);
-}
 }
