@@ -15,6 +15,9 @@ import com.demo.persistencia.demopersistencia.security.JwtUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+// ✅ IMPORTANTE PARA ENCRIPTAR PASSWORD
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 @RestController
 @RequestMapping("/api/medico")
 @CrossOrigin(origins = "*")
@@ -25,6 +28,10 @@ public class MedicoController {
 
     @Autowired
     private MedicoRepository medicoRepository;
+
+    // ✅ 🔥 ENCODER DE PASSWORD
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     // ===============================
     // ✅ PERFIL (SOLO MEDICO)
@@ -56,7 +63,7 @@ public class MedicoController {
     // ===============================
     @PostMapping("/crear-con-usuario")
     public Map<String, String> crear(@RequestBody Map<String, Object> datos,
-                                    HttpServletRequest request) {
+                                     HttpServletRequest request) {
 
         String token = request.getHeader("Authorization").substring(7);
         String rol = JwtUtil.getRol(token);
@@ -65,8 +72,15 @@ public class MedicoController {
             throw new RuntimeException("Solo ADMIN puede crear médicos");
         }
 
-        Medico medico = new Medico();
+        // ✅ VALIDAR USERNAME DUPLICADO
+        String username = (String) datos.get("username");
 
+        if (usuarioRepository.findByUsername(username) != null) {
+            throw new RuntimeException("❌ El username ya existe");
+        }
+
+        // ✅ CREAR MÉDICO
+        Medico medico = new Medico();
         medico.setNombreCompleto((String) datos.get("nombreCompleto"));
         medico.setEspecialidad((String) datos.get("especialidad"));
         medico.setDireccion((String) datos.get("direccion"));
@@ -79,14 +93,22 @@ public class MedicoController {
 
         medico.setFechaRegistro(LocalDate.now());
 
+        // ✅ GUARDAR MÉDICO
         medico = medicoRepository.save(medico);
 
+        // ✅ CREAR USUARIO
         Usuario usuario = new Usuario();
-        usuario.setUsername((String) datos.get("username"));
-        usuario.setPassword((String) datos.get("password"));
+        usuario.setUsername(username);
+
+        // ✅ 🔥 AQUÍ ESTÁ LA SOLUCIÓN
+        usuario.setPassword(
+            passwordEncoder.encode((String) datos.get("password"))
+        );
+
         usuario.setTipoUsuario("MEDICO");
         usuario.setMedicoId(medico.getMedicoId());
 
+        // ✅ GUARDAR USUARIO
         usuarioRepository.save(usuario);
 
         return Map.of("mensaje", "✅ Médico creado correctamente");
@@ -97,7 +119,7 @@ public class MedicoController {
     // ===============================
     @GetMapping("/buscar")
     public List<Medico> buscar(@RequestParam String nombre,
-                              HttpServletRequest request) {
+                               HttpServletRequest request) {
 
         String rol = JwtUtil.getRol(request.getHeader("Authorization").substring(7));
 
@@ -160,5 +182,3 @@ public class MedicoController {
         medicoRepository.deleteById(id);
     }
 }
-
-
