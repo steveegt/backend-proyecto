@@ -15,7 +15,6 @@ import com.demo.persistencia.demopersistencia.security.JwtUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-// ✅ IMPORTANTE PARA ENCRIPTAR PASSWORD
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @RestController
@@ -29,7 +28,6 @@ public class MedicoController {
     @Autowired
     private MedicoRepository medicoRepository;
 
-    // ✅ 🔥 ENCODER DE PASSWORD
     @Autowired
     private PasswordEncoder passwordEncoder;
 
@@ -39,7 +37,13 @@ public class MedicoController {
     @GetMapping("/mi-perfil")
     public Medico miPerfil(HttpServletRequest request) {
 
-        String token = request.getHeader("Authorization").substring(7);
+        String header = request.getHeader("Authorization");
+
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Token inválido");
+        }
+
+        String token = header.substring(7);
         String username = JwtUtil.getUsername(token);
         String rol = JwtUtil.getRol(token);
 
@@ -61,13 +65,78 @@ public class MedicoController {
     // ===============================
     // ✅ CREAR MÉDICO (SOLO ADMIN)
     // ===============================
-   @PostMapping("/crear-con-usuario")
-public Map<String, String> crear(@RequestBody Map<String, Object> datos,
-                                 HttpServletRequest request) {
+    @PostMapping("/crear-con-usuario")
+    public Map<String, String> crear(@RequestBody Map<String, Object> datos,
+                                     HttpServletRequest request) {
 
-    try {
+        try {
 
-        // ✅ VALIDAR TOKEN
+            String header = request.getHeader("Authorization");
+
+            if (header == null || !header.startsWith("Bearer ")) {
+                throw new RuntimeException("Token inválido");
+            }
+
+            String token = header.substring(7);
+            String rol = JwtUtil.getRol(token);
+
+            if (!"ADMIN".equals(rol)) {
+                throw new RuntimeException("Solo ADMIN puede crear médicos");
+            }
+
+            // ✅ USERNAME
+            String username = (String) datos.get("username");
+
+            if (usuarioRepository.findByUsername(username) != null) {
+                throw new RuntimeException("El username ya existe");
+            }
+
+            // ✅ CREAR MÉDICO
+            Medico medico = new Medico();
+            medico.setNombreCompleto((String) datos.get("nombreCompleto"));
+            medico.setEspecialidad((String) datos.get("especialidad"));
+            medico.setDireccion((String) datos.get("direccion"));
+            medico.setObservacion((String) datos.get("observacion"));
+            medico.setColegiado((String) datos.get("colegiado"));
+
+            if (datos.get("edad") != null && !datos.get("edad").toString().isEmpty()) {
+                try {
+                    medico.setEdad(Integer.parseInt(datos.get("edad").toString()));
+                } catch (Exception e) {
+                    throw new RuntimeException("Edad inválida");
+                }
+            }
+
+            medico.setFechaRegistro(LocalDate.now());
+
+            medico = medicoRepository.save(medico);
+
+            // ✅ CREAR USUARIO
+            Usuario usuario = new Usuario();
+            usuario.setUsername(username);
+            usuario.setPassword(
+                passwordEncoder.encode((String) datos.get("password"))
+            );
+            usuario.setTipoUsuario("MEDICO");
+            usuario.setMedicoId(medico.getMedicoId());
+
+            usuarioRepository.save(usuario);
+
+            return Map.of("mensaje", "Médico creado correctamente");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error creando médico: " + e.getMessage());
+        }
+    }
+
+    // ===============================
+    // ✅ BUSCAR MÉDICOS (SOLO ADMIN) ✅🔥 NUEVO
+    // ===============================
+    @GetMapping("/buscar")
+    public List<Medico> buscar(@RequestParam String nombre,
+                               HttpServletRequest request) {
+
         String header = request.getHeader("Authorization");
 
         if (header == null || !header.startsWith("Bearer ")) {
@@ -78,59 +147,9 @@ public Map<String, String> crear(@RequestBody Map<String, Object> datos,
         String rol = JwtUtil.getRol(token);
 
         if (!"ADMIN".equals(rol)) {
-            throw new RuntimeException("Solo ADMIN puede crear médicos");
+            throw new RuntimeException("Acceso denegado");
         }
 
-        // ✅ USERNAME
-        String username = (String) datos.get("username");
-
-        if (usuarioRepository.findByUsername(username) != null) {
-            throw new RuntimeException("El username ya existe");
-        }
-
-        // ✅ CREAR MÉDICO
-        Medico medico = new Medico();
-        medico.setNombreCompleto((String) datos.get("nombreCompleto"));
-        medico.setEspecialidad((String) datos.get("especialidad"));
-        medico.setDireccion((String) datos.get("direccion"));
-        medico.setObservacion((String) datos.get("observacion"));
-        medico.setColegiado((String) datos.get("colegiado"));
-
-        // ✅ MANEJO SEGURO DE EDAD
-        if (datos.get("edad") != null && !datos.get("edad").toString().isEmpty()) {
-            try {
-                medico.setEdad(Integer.parseInt(datos.get("edad").toString()));
-            } catch (Exception e) {
-                throw new RuntimeException("Edad inválida");
-            }
-        }
-
-        // ✅ SOLO si tienes ese campo en la entidad
-        medico.setFechaRegistro(LocalDate.now());
-
-        // ✅ GUARDAR MÉDICO
-        medico = medicoRepository.save(medico);
-
-        // ✅ CREAR USUARIO
-        Usuario usuario = new Usuario();
-        usuario.setUsername(username);
-
-        usuario.setPassword(
-            passwordEncoder.encode((String) datos.get("password"))
-        );
-
-        usuario.setTipoUsuario("MEDICO");
-        usuario.setMedicoId(medico.getMedicoId());
-
-        usuarioRepository.save(usuario);
-
-        return Map.of("mensaje", "Médico creado correctamente");
-
-    } catch (Exception e) {
-
-        // 🔥 ESTO ES CLAVE
-        e.printStackTrace();
-
-        throw new RuntimeException("Error creando médico: " + e.getMessage());
+        return medicoRepository.findByNombreCompletoContainingIgnoreCase(nombre);
     }
-}}
+}
