@@ -18,7 +18,7 @@ public class CorsConfig {
 
         config.setAllowCredentials(true);
 
-        // ✅ PERMITIR TU FRONTEND
+        // ✅ ❗ SIN SLASH AL FINAL (ERROR QUE TENÍAS)
         config.setAllowedOrigins(List.of(
             "https://frontend-proyecto-production-f55d.up.railway.app/"
         ));
