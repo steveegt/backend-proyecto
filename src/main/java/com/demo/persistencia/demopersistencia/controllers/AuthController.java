@@ -22,46 +22,59 @@ public class AuthController {
     private UsuarioRepository usuarioRepository;
 
     @PostMapping("/login")
-public LoginResponse login(@RequestBody LoginRequest request) {
+    public LoginResponse login(@RequestBody LoginRequest request) {
 
-    String username = request.getUsername().trim();
-    String password = request.getPassword().trim();
+        try {
 
-    Usuario usuario = usuarioRepository.findByUsername(username);
+            // ✅ VALIDAR REQUEST
+            if (request == null || request.getUsername() == null || request.getPassword() == null) {
+                throw new RuntimeException("Datos de login incompletos");
+            }
 
-    if (usuario == null) {
-        throw new RuntimeException("Usuario no encontrado");
+            String username = request.getUsername().trim();
+            String password = request.getPassword().trim();
+
+            // ✅ BUSCAR USUARIO
+            Usuario usuario = usuarioRepository.findByUsername(username);
+
+            if (usuario == null) {
+                throw new RuntimeException("Usuario no encontrado");
+            }
+
+            // ✅ VALIDAR PASSWORD
+            String passwordBD = usuario.getPassword();
+
+            if (passwordBD == null || passwordBD.isEmpty()) {
+                throw new RuntimeException("El usuario no tiene contraseña válida");
+            }
+
+            boolean valido = false;
+
+            try {
+                // ✅ bcrypt (lo normal)
+                valido = passwordEncoder.matches(password, passwordBD);
+            } catch (Exception e) {
+                // ✅ fallback por si el password estaba en texto plano
+                valido = passwordBD.equals(password);
+            }
+
+            if (!valido) {
+                throw new RuntimeException("Contraseña incorrecta");
+            }
+
+            // ✅ GENERAR TOKEN
+            String token = JwtUtil.generarToken(usuario);
+
+            LoginResponse response = new LoginResponse();
+            response.setToken(token);
+            response.setTipoUsuario(usuario.getTipoUsuario());
+
+            return response;
+
+        } catch (Exception e) {
+            // ✅ ESTO ES CLAVE PARA VER EL ERROR REAL EN RAILWAY
+            e.printStackTrace();
+            throw new RuntimeException(e.getMessage());
+        }
     }
-
-    String passwordBD = usuario.getPassword();
-
-    if (passwordBD == null) {
-        throw new RuntimeException("Password en BD es NULL");
-    }
-
-    boolean valido;
-
-    try {
-        valido = passwordEncoder.matches(password, passwordBD);
-    } catch (Exception e) {
-        throw new RuntimeException("Error comparando password: " + e.getMessage());
-    }
-
-    if (!valido) {
-        throw new RuntimeException("Contraseña incorrecta");
-    }
-
-    try {
-        String token = JwtUtil.generarToken(usuario);
-
-        LoginResponse response = new LoginResponse();
-        response.setToken(token);
-        response.setTipoUsuario(usuario.getTipoUsuario());
-
-        return response;
-
-    } catch (Exception e) {
-        throw new RuntimeException("Error generando token: " + e.getMessage());
-    }
-}
 }
